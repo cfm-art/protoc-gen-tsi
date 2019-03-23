@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -14,6 +15,21 @@ import (
 	descriptor "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
 )
+
+// TypeInfo is 型情報
+type TypeInfo struct {
+	Package  *string
+	Name     *string
+	FullName string
+	FullPath *string
+}
+
+// TypeInfoList is 全ての型情報
+type TypeInfoList struct {
+	Types        []TypeInfo
+	IndexPackage map[string][]TypeInfo
+	IndexName    map[string][]TypeInfo
+}
 
 // genTypeName is 最初の.自身のパッケージを取り除く
 func genTypeName(file *descriptor.FileDescriptorProto, typeName string) string {
@@ -214,7 +230,7 @@ func makeService(option com.Option, file *descriptor.FileDescriptorProto, sv des
 }
 
 //  makeEnumTypes is 列挙型を全て解決
-func makeEnumTypes(option com.Option, f *descriptor.FileDescriptorProto) string {
+func makeEnumTypes(option com.Option, types *TypeInfoList, f *descriptor.FileDescriptorProto) string {
 	content := ""
 	for _, e := range f.EnumType {
 		content += makeEnumType(option, f, *e)
@@ -223,7 +239,7 @@ func makeEnumTypes(option com.Option, f *descriptor.FileDescriptorProto) string 
 }
 
 // makeMessageTypes is 構造体を全て解決
-func makeMessageTypes(option com.Option, f *descriptor.FileDescriptorProto) string {
+func makeMessageTypes(option com.Option, types *TypeInfoList, f *descriptor.FileDescriptorProto) string {
 	content := ""
 	for _, message := range f.MessageType {
 		classText := makeMessageType(option, f, message)
@@ -233,7 +249,7 @@ func makeMessageTypes(option com.Option, f *descriptor.FileDescriptorProto) stri
 }
 
 // makeServices is エンドポイントを全て解決
-func makeServices(option com.Option, f *descriptor.FileDescriptorProto) string {
+func makeServices(option com.Option, types *TypeInfoList, f *descriptor.FileDescriptorProto) string {
 	content := ""
 	for _, s := range f.Service {
 		content += makeService(option, f, *s)
@@ -242,25 +258,61 @@ func makeServices(option com.Option, f *descriptor.FileDescriptorProto) string {
 }
 
 // makeDependencies is 依存関係の解決
-func makeDependencies(option com.Option, files map[string]*descriptor.FileDescriptorProto, f *descriptor.FileDescriptorProto) string {
+func makeDependencies(option com.Option, types *TypeInfoList, files *map[string]*descriptor.FileDescriptorProto, f *descriptor.FileDescriptorProto) string {
 	content := ""
 	for _, s := range f.Dependency {
 		// import * as <Hoge> from './<Hoge>.proto;'
-		dep := files[s]
-		content += "import * as " + strings.Replace(*dep.Package, ".", "_", -1) + " from './" + s + "';\n"
+		dep := (*files)[s]
+		rel, _ := filepath.Rel(filepath.Dir(*f.Name), *dep.Name)
+		content += "import * as " + strings.Replace(*dep.Package, ".", "_", -1) + " from './" + rel + "';\n"
 	}
 	return content
+}
+
+// generateTypeInfo is 型情報を生成する
+func generateTypeInfo(req *plugin.CodeGeneratorRequest) (map[string]*descriptor.FileDescriptorProto, TypeInfoList) {
+	files := make(map[string]*descriptor.FileDescriptorProto) // ファイルの一覧
+	types := TypeInfoList{
+		[]TypeInfo{},
+		make(map[string][]TypeInfo),
+		make(map[string][]TypeInfo)} // 構造体(Message)の一覧
+
+	for _, f := range req.ProtoFile {
+		files[f.GetName()] = f
+
+		// 全ての構造体をまとめる
+		for _, m := range f.MessageType {
+			t := TypeInfo{
+				Package:  f.Package,
+				Name:     m.Name,
+				FullName: *f.Package + *m.Name,
+				FullPath: f.Name}
+			types.Types = append(types.Types, t)
+			// インデックスを用意しておく
+			IndexName, ok := types.IndexName[*m.Name]
+			if !ok {
+				IndexName = []TypeInfo{}
+			}
+			IndexPackage, ok := types.IndexPackage[*f.Package]
+			if !ok {
+				IndexPackage = []TypeInfo{}
+			}
+			types.IndexName[*m.Name] = append(IndexName, t)
+			types.IndexPackage[*f.Package] = append(IndexPackage, t)
+		}
+	}
+
+	return files, types
 }
 
 // process is 変換処理取りまとめ
 func process(req *plugin.CodeGeneratorRequest) *plugin.CodeGeneratorResponse {
 	option := com.ParseArgument(req)
 
-	files := make(map[string]*descriptor.FileDescriptorProto)
-	for _, f := range req.ProtoFile {
-		files[f.GetName()] = f
-	}
+	// 事前に必要な情報を全てまとめる
+	files, types := generateTypeInfo(req)
 
+	// ファイルを順番に処理
 	var res plugin.CodeGeneratorResponse
 	for _, fname := range req.FileToGenerate {
 		f := files[fname]
@@ -276,16 +328,16 @@ func process(req *plugin.CodeGeneratorRequest) *plugin.CodeGeneratorResponse {
 		messageText := make(chan string)
 		serviceText := make(chan string)
 
-		depText := makeDependencies(option, files, f)
+		depText := makeDependencies(option, &types, &files, f)
 
 		go func() {
-			enumText <- makeEnumTypes(option, f)
+			enumText <- makeEnumTypes(option, &types, f)
 		}()
 		go func() {
-			messageText <- makeMessageTypes(option, f)
+			messageText <- makeMessageTypes(option, &types, f)
 		}()
 		go func() {
-			serviceText <- makeServices(option, f)
+			serviceText <- makeServices(option, &types, f)
 		}()
 
 		// 同期して結合

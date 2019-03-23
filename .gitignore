@@ -3,3 +3,6 @@ bin/
 *.a
 *.o
 *.
+testdata/
+/protoc-gen-tsi
+/protoc-gen-tsi.exe
