@@ -32,17 +32,12 @@ type TypeInfoList struct {
 	IndexFullPath map[string][]TypeInfo
 }
 
-// genTypeName is 最初の.自身のパッケージを取り除く
+// genTypeName is パッケージを取り除く
 func genTypeName(file *descriptor.FileDescriptorProto, typeName string) string {
 	// .<パッケージ>.<型>
 	// .<型>
-	var reg *regexp.Regexp
-	if file.Package != nil {
-		reg = regexp.MustCompile(`^\.(` + strings.Replace(*file.Package, "/", ".", -1) + `\.)?(.+)`)
-	} else {
-		reg = regexp.MustCompile(`^\.(.+)`)
-	}
-	v := reg.ReplaceAllString(typeName, "$2")
+	reg := regexp.MustCompile(`^(?:.+\.)?(.+)$`)
+	v := reg.ReplaceAllString(typeName, "$1")
 	return strings.Replace(v, ".", "_", strings.Count(v, ".")-1) // 最後の1個の.を残して後は_へ
 }
 
@@ -279,7 +274,7 @@ func makeDependencies(option com.Option, types *TypeInfoList, files *map[string]
 			for _, m := range typeList {
 				lists = append(lists, *m.Name)
 			}
-			content += "import {" + strings.Join(lists, ", ") + "} from './" + rel + "';\n"
+			content += "import {" + strings.Join(lists, ", ") + "} from './" + strings.Replace(rel, `\`, "/", -1) + "';\n"
 		}
 	}
 	return content
