@@ -190,6 +190,7 @@ func makeServiceClientAsFetch(file *descriptor.FileDescriptorProto, sv descripto
 			body: JSON.stringify(input)
 		});
 		const response = await fetch(url, query);
+		if (!response.ok) { throw { message: await response.text(), status: response.status }; }
 		return (await response.json()) as ` + output + `;
 	}
 	`
