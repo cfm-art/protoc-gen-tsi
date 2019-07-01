@@ -42,10 +42,14 @@ func genTypeName(file *descriptor.FileDescriptorProto, typeName string) string {
 }
 
 // getLabelText is 各フィールドの型にOptional/Arrayを付与
-func getLabelText(file *descriptor.FileDescriptorProto, fieldName string, typeName string, fieldLabel descriptor.FieldDescriptorProto_Label) string {
+func getLabelText(option com.Option, file *descriptor.FileDescriptorProto, fieldName string, typeName string, fieldLabel descriptor.FieldDescriptorProto_Label) string {
 	if fieldLabel == descriptor.FieldDescriptorProto_LABEL_OPTIONAL {
 		// OPTIONAL is ?
-		return fieldName + "?" + " : " + genTypeName(file, typeName)
+		if option.Nonull {
+			return fieldName + " : " + genTypeName(file, typeName)
+		} else {
+			return fieldName + "?" + " : " + genTypeName(file, typeName)
+		}
 	} else if fieldLabel == descriptor.FieldDescriptorProto_LABEL_REQUIRED {
 		// !
 		return fieldName + " : " + genTypeName(file, typeName)
@@ -102,10 +106,10 @@ func getTypeText(typeName *string, fieldType descriptor.FieldDescriptorProto_Typ
 }
 
 // makeMessageField is 各フィールドを解決
-func makeMessageField(file *descriptor.FileDescriptorProto, field *descriptor.FieldDescriptorProto) string {
+func makeMessageField(option com.Option, file *descriptor.FileDescriptorProto, field *descriptor.FieldDescriptorProto) string {
 	fieldName := *field.Name
 	typeName := getTypeText(field.TypeName, *field.Type) // FieldDescriptorProto_Type
-	return getLabelText(file, fieldName, typeName, *field.Label)
+	return getLabelText(option, file, fieldName, typeName, *field.Label)
 }
 
 /*
@@ -119,7 +123,7 @@ ____<Field>;
 func makeMessageType(option com.Option, file *descriptor.FileDescriptorProto, message *descriptor.DescriptorProto) string {
 	result := "export interface " + *message.Name + "\n{\n"
 	for _, field := range message.Field {
-		fieldText := makeMessageField(file, field)
+		fieldText := makeMessageField(option, file, field)
 		result += "\t" + fieldText + ";\n"
 	}
 	result += "}\n"

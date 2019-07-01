@@ -37,11 +37,12 @@ func WriteTo(res *plugin.CodeGeneratorResponse, w io.Writer) error {
 type Option struct {
 	GenClient  bool
 	ClientType string
+	Nonull bool
 }
 
 // ParseArgument is 渡されたパラメータをいい加減に解析
 func ParseArgument(req *plugin.CodeGeneratorRequest) Option {
-	result := Option{ true, "fetch" }
+	result := Option{ true, "fetch", false }
 	if req.Parameter != nil {
 		for _, p := range strings.Split(req.GetParameter(), ",") {
 			tokens := strings.SplitN(p, "=", 2)
@@ -55,6 +56,10 @@ func ParseArgument(req *plugin.CodeGeneratorRequest) Option {
 					result.ClientType = value
 					if value != "fetch" && value != "ajax" {
 						log.Fatalf("Invalid ClientType : " + value)
+					}
+				} else if key == "nonull" {
+					if value == "true" {
+						result.Nonull = true
 					}
 				}
 			}
