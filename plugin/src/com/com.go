@@ -34,15 +34,17 @@ func WriteTo(res *plugin.CodeGeneratorResponse, w io.Writer) error {
 	return err
 }
 
+// Option is コマンドライン引数
 type Option struct {
 	GenClient  bool
 	ClientType string
-	Nonull bool
+	Nonull     bool
+	DupArray   bool
 }
 
 // ParseArgument is 渡されたパラメータをいい加減に解析
 func ParseArgument(req *plugin.CodeGeneratorRequest) Option {
-	result := Option{ true, "fetch", false }
+	result := Option{true, "fetch", false, true}
 	if req.Parameter != nil {
 		for _, p := range strings.Split(req.GetParameter(), ",") {
 			tokens := strings.SplitN(p, "=", 2)
@@ -60,6 +62,10 @@ func ParseArgument(req *plugin.CodeGeneratorRequest) Option {
 				} else if key == "nonull" {
 					if value == "true" {
 						result.Nonull = true
+					}
+				} else if key == "duparray" {
+					if value == "true" {
+						result.DupArray = true
 					}
 				}
 			}

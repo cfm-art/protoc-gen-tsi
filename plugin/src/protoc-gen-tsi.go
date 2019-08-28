@@ -47,9 +47,8 @@ func getLabelText(option com.Option, file *descriptor.FileDescriptorProto, field
 		// OPTIONAL is ?
 		if option.Nonull {
 			return fieldName + " : " + genTypeName(file, typeName)
-		} else {
-			return fieldName + "?" + " : " + genTypeName(file, typeName)
 		}
+		return fieldName + "?" + " : " + genTypeName(file, typeName)
 	} else if fieldLabel == descriptor.FieldDescriptorProto_LABEL_REQUIRED {
 		// !
 		return fieldName + " : " + genTypeName(file, typeName)
@@ -59,6 +58,14 @@ func getLabelText(option com.Option, file *descriptor.FileDescriptorProto, field
 	} else {
 		return fieldName + "?" + " : " + genTypeName(file, typeName)
 	}
+}
+
+// getDupArrayLabelText is Arrayの複製を追加
+func getDupArrayLabelText(file *descriptor.FileDescriptorProto, field *descriptor.FieldDescriptorProto) string {
+	// REPEATED is []
+	fieldName := *field.Name
+	typeName := getTypeText(field.TypeName, *field.Type) // FieldDescriptorProto_Type
+	return fieldName + "_? : " + genTypeName(file, typeName) + "[]"
 }
 
 // getTypeText is 各フィールドの型名の解決
@@ -125,6 +132,10 @@ func makeMessageType(option com.Option, file *descriptor.FileDescriptorProto, me
 	for _, field := range message.Field {
 		fieldText := makeMessageField(option, file, field)
 		result += "\t" + fieldText + ";\n"
+		// 配列を複製
+		if option.DupArray && *field.Label == descriptor.FieldDescriptorProto_LABEL_REPEATED {
+			result += "\t" + getDupArrayLabelText(file, field) + ";\n"
+		}
 	}
 	result += "}\n"
 	return result
